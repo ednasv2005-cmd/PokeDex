@@ -213,6 +213,7 @@ class TeamsScreen extends ConsumerWidget {
           style: TextStyle(color: Colors.white),
         ),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
     );
   }
 }
