@@ -26,6 +26,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   bool _isLoading = false;
   List<String> _types = [];
   List<Map<String, dynamic>> _generations = [];
+  String? _error;
 
   @override
   void initState() {
@@ -35,12 +36,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   Future<void> _loadFilters() async {
     final api = ref.read(pokeApiServiceProvider);
-    final types = await api.fetchTypes();
-    final gens = await api.fetchGenerations();
-    setState(() {
-      _types = types;
-      _generations = gens;
-    });
+    try {
+      final types = await api.fetchTypes();
+      final gens = await api.fetchGenerations();
+      if (!mounted) return;
+      setState(() {
+        _types = types;
+        _generations = gens;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'No se pudieron cargar los filtros');
+    }
   }
 
   void _onSearchChanged(String value) {
@@ -59,17 +66,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _error = null;
+      _results = [];
+    });
 
     try {
       final api = ref.read(pokeApiServiceProvider);
-
-      // Búsqueda simple por nombre o número (usamos el listado base)
-      // Para producción real se recomienda tener el listado completo cacheado
-      final list = await api.fetchPokemonList(
-        limit: 100,
-        offset: 0,
-      ); // ejemplo limitado
+      final list = await api.fetchPokemonList(limit: 2000, offset: 0);
 
       List<Pokemon> filtered = [];
 
@@ -82,29 +87,59 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             _query.isEmpty || name.contains(_query) || id.toString() == _query;
 
         if (!matchQuery) continue;
-
-        // Aquí podrías filtrar también por tipo/generación si tienes más datos
         filtered.add(Pokemon.basic(id: id, name: name));
       }
 
-      // Si hay tipo seleccionado, pedimos detalles (limitado para no saturar)
-      if (_selectedType != null && filtered.isNotEmpty) {
-        final urls = filtered
-            .take(30)
-            .map((p) => 'https://pokeapi.co/api/v2/pokemon/${p.id}')
-            .toList();
-        final detailed = await api.fetchPokemonDetailsBatch(urls);
-        filtered = detailed
-            .where((p) => p.types.contains(_selectedType))
+      Set<int>? allowedIds;
+      if (_selectedType != null) {
+        allowedIds = await api.fetchPokemonIdsByType(_selectedType!);
+      }
+      if (_selectedGeneration != null) {
+        final generationIds = await api.fetchPokemonIdsByGeneration(
+          _selectedGeneration!,
+        );
+        allowedIds = allowedIds == null
+            ? generationIds
+            : allowedIds.intersection(generationIds);
+      }
+
+      var candidates = allowedIds == null
+          ? filtered
+          : filtered
+                .where((pokemon) => allowedIds!.contains(pokemon.id))
+                .toList();
+
+      if (_selectedType != null) {
+        final detailed = <Pokemon>[];
+        const batchSize = 40;
+        for (var start = 0; start < candidates.length; start += batchSize) {
+          final end = (start + batchSize < candidates.length)
+              ? start + batchSize
+              : candidates.length;
+          final urls = candidates
+              .sublist(start, end)
+              .map(
+                (pokemon) => 'https://pokeapi.co/api/v2/pokemon/${pokemon.id}',
+              )
+              .toList();
+          detailed.addAll(await api.fetchPokemonDetailsBatch(urls));
+        }
+        candidates = detailed
+            .where((pokemon) => pokemon.types.contains(_selectedType))
             .toList();
       }
 
       setState(() {
-        _results = filtered;
+        _results = candidates;
         _isLoading = false;
       });
-    } catch (e) {
-      setState(() => _isLoading = false);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = 'Ocurrió un error al buscar. Intenta nuevamente.';
+        _results = [];
+      });
     }
   }
 
@@ -214,9 +249,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(_error!, textAlign: TextAlign.center),
+                    ),
+                  )
                 : _results.isEmpty
                 ? const Center(
-                    child: Text('Escribe para buscar o aplica filtros'),
+                    child: Text(
+                      'Escribe para buscar o aplica filtros',
+                      textAlign: TextAlign.center,
+                    ),
                   )
                 : GridView.builder(
                     padding: const EdgeInsets.all(12),

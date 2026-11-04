@@ -14,7 +14,17 @@ class TeamDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final teams = ref.watch(teamsProvider);
-    final team = teams.firstWhere((t) => t.id == teamId);
+    final matches = teams.where((t) => t.id == teamId);
+    if (matches.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Equipo'),
+          backgroundColor: AppColors.pokeRed,
+        ),
+        body: const Center(child: Text('Este equipo ya no existe')),
+      );
+    }
+    final team = matches.first;
 
     return Scaffold(
       appBar: AppBar(
@@ -116,9 +126,10 @@ class _PokemonSlot extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text('#$id', style: const TextStyle(fontWeight: FontWeight.bold)),
-            const Text(
-              'Mantén para quitar',
-              style: TextStyle(fontSize: 10, color: Colors.grey),
+            IconButton(
+              tooltip: 'Quitar del equipo',
+              onPressed: onRemove,
+              icon: const Icon(Icons.close, size: 18, color: Colors.red),
             ),
           ],
         ),

@@ -245,13 +245,21 @@ class _PokemonDetailScreenState extends ConsumerState<PokemonDetailScreen> {
                         title: Text(team.name),
                         subtitle: Text('${team.pokemonIds.length}/6'),
                         onTap: () {
-                          ref
+                          final result = ref
                               .read(teamsProvider.notifier)
                               .addPokemon(team.id, pokemon.id);
                           Navigator.pop(ctx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Agregado a ${team.name}')),
-                          );
+                          final message = switch (result) {
+                            AddPokemonResult.added => 'Agregado a ${team.name}',
+                            AddPokemonResult.alreadyAdded =>
+                              '${pokemon.name} ya está en este equipo',
+                            AddPokemonResult.teamFull =>
+                              '${team.name} ya tiene 6 Pokémon',
+                            AddPokemonResult.teamNotFound =>
+                              'El equipo ya no existe',
+                          };
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(content: Text(message)));
                         },
                       );
                     }).toList(),

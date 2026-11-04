@@ -134,10 +134,31 @@ class TeamsScreen extends ConsumerWidget {
                         ),
                         IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () {
-                            ref
-                                .read(teamsProvider.notifier)
-                                .deleteTeam(team.id);
+                          onPressed: () async {
+                            final confirmed = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Eliminar equipo'),
+                                content: Text(
+                                  '¿Eliminar "${team.name}" y sus Pokémon?',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, false),
+                                    child: const Text('Cancelar'),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    child: const Text('Eliminar'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirmed == true) {
+                              ref
+                                  .read(teamsProvider.notifier)
+                                  .deleteTeam(team.id);
+                            }
                           },
                         ),
                       ],

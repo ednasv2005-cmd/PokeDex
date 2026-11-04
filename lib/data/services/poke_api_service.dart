@@ -95,4 +95,22 @@ class PokeApiService {
     final response = await _dio.get('/generation');
     return List<Map<String, dynamic>>.from(response.data['results']);
   }
+
+  Future<Set<int>> fetchPokemonIdsByType(String type) async {
+    final response = await _dio.get('/type/$type');
+    final entries = response.data['pokemon'] as List;
+    return entries.map<int>((entry) {
+      final parts = (entry['pokemon']['url'] as String).split('/');
+      return int.parse(parts[parts.length - 2]);
+    }).toSet();
+  }
+
+  Future<Set<int>> fetchPokemonIdsByGeneration(String generation) async {
+    final response = await _dio.get('/generation/$generation');
+    final entries = response.data['pokemon_species'] as List;
+    return entries.map((entry) {
+      final parts = (entry['url'] as String).split('/');
+      return int.parse(parts[parts.length - 2]);
+    }).toSet();
+  }
 }

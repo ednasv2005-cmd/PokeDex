@@ -1,8 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'dart:math';
+
 import '../data/models/team.dart';
 import '../data/services/poke_api_service.dart';
+
+enum AddPokemonResult { added, alreadyAdded, teamFull, teamNotFound }
 
 final teamsProvider = StateNotifierProvider<TeamsNotifier, List<Team>>((ref) {
   return TeamsNotifier();
@@ -18,7 +22,12 @@ class TeamsNotifier extends StateNotifier<List<Team>> {
 
   void _loadTeams() {
     final data = _box.get('teams_list', defaultValue: <Map>[]);
+    if (data is! List) {
+      state = [];
+      return;
+    }
     state = data
+        .whereType<Map>()
         .map((e) => Team.fromJson(Map<String, dynamic>.from(e)))
         .toList();
   }
@@ -49,17 +58,24 @@ class TeamsNotifier extends StateNotifier<List<Team>> {
     _save();
   }
 
-  void addPokemon(String teamId, int pokemonId) {
+  AddPokemonResult addPokemon(String teamId, int pokemonId) {
+    final matches = state.where((team) => team.id == teamId);
+    if (matches.isEmpty) return AddPokemonResult.teamNotFound;
+    final team = matches.first;
+    if (team.pokemonIds.length >= 6) return AddPokemonResult.teamFull;
+    if (team.pokemonIds.contains(pokemonId)) {
+      return AddPokemonResult.alreadyAdded;
+    }
+
     state = [
       for (final t in state)
-        if (t.id == teamId &&
-            t.pokemonIds.length < 6 &&
-            !t.pokemonIds.contains(pokemonId))
+        if (t.id == teamId)
           Team(id: t.id, name: t.name, pokemonIds: [...t.pokemonIds, pokemonId])
         else
           t,
     ];
     _save();
+    return AddPokemonResult.added;
   }
 
   void removePokemon(String teamId, int pokemonId) {
@@ -80,13 +96,9 @@ class TeamsNotifier extends StateNotifier<List<Team>> {
   // Equipo aleatorio
   Future<void> createRandomTeam(String name, PokeApiService api) async {
     final randomIds = <int>{};
+    final random = Random.secure();
     while (randomIds.length < 6) {
-      randomIds.add(
-        (1 + (DateTime.now().millisecondsSinceEpoch % 1025)).toInt(),
-      );
-      await Future.delayed(
-        const Duration(milliseconds: 1),
-      ); // para variar el seed
+      randomIds.add(random.nextInt(1025) + 1);
     }
 
     final team = Team(name: name, pokemonIds: randomIds.toList());
